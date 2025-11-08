@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Futuristic QR Generator (QRServer API)</title>
+<style>
+  :root{
+    --bg1:#0b1020; --bg2:#0f172a; --card:#0d1329; --ink:#e5e7eb; --muted:#9fb0ca;
+    --accent:#60a5fa; --accent-2:#a78bfa; --border:#1f2a4a;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    color:var(--ink); background:radial-gradient(1200px 800px at 20% -10%, #1d2a6e44, transparent 60%),
+                       linear-gradient(120deg,var(--bg1),var(--bg2));
+    display:flex; align-items:center; justify-content:center; padding:18px;
+  }
+  .wrap{
+    width:100%; max-width:980px; display:grid; gap:18px;
+    grid-template-columns: 1.1fr .9fr;
+  }
+  @media (max-width:900px){ .wrap{grid-template-columns:1fr} }
+  .card{
+    background:linear-gradient(180deg, #0c1434cc, #0a0f26cc);
+    border:1px solid var(--border); border-radius:18px; padding:18px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.45), inset 0 0 0 1px #ffffff08;
+    backdrop-filter: blur(6px);
+  }
+  .title{display:flex; align-items:center; gap:10px; margin:2px 0 12px}
+  .title .dot{width:10px; height:10px; border-radius:50%;
+    background:radial-gradient(circle at 35% 35%, #7dd3fc, #3b82f6 60%, #1d4ed8)}
+  .title h1{font-size:20px; margin:0}
+  .sub{color:var(--muted); font-size:13px; margin:0 0 6px}
+  .row{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+  .row-3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px}
+  label{font-size:12px; color:#b6c5db; margin:10px 0 6px; display:block}
+  input[type="text"], select, input[type="number"]{
+    width:100%; padding:12px 14px; border-radius:12px; border:1px solid var(--border);
+    background:#0b1230; color:var(--ink); outline:none;
+  }
+  input[type="text"]:focus, select:focus, input[type="number"]:focus{
+    border-color:#2c4bd4; box-shadow:0 0 0 3px #3353a83d;
+  }
+  input[type="color"]{
+    width:100%; height:42px; border-radius:12px; border:1px solid var(--border); background:#0b1230; padding:4px;
+  }
+  input[type="range"]{ width:100% }
+  .controls{display:grid; gap:8px}
+  .hint{font-size:12px; color:#8aa0bf}
+
+  .preview{
+    position:relative; display:grid; place-items:center; min-height:420px; padding:16px;
+    border:1px dashed var(--border); border-radius:18px; background:
+      radial-gradient(500px 300px at 20% 10%, #60a5fa1f, transparent 60%),
+      linear-gradient(180deg, #070b1a, #0a1026);
+    overflow:hidden;
+  }
+  .preview::after{
+    content:""; position:absolute; inset:-40%;
+    background:conic-gradient(from 180deg at 50% 50%, #60a5fa22, #a78bfa22, #60a5fa22);
+    filter: blur(40px); opacity:.25; pointer-events:none;
+  }
+  .qr-wrap{
+    transform: perspective(800px) rotateX(0) rotateY(0); transition: transform .25s ease, box-shadow .25s ease;
+    border-radius:16px; padding:14px; background:#0b1230; border:1px solid #1a2650;
+    box-shadow: 0 10px 30px #00000066, 0 0 0 6px #60a5fa11, inset 0 0 0 1px #ffffff08;
+  }
+  .qr-wrap:hover{ transform: perspective(800px) rotateX(3deg) rotateY(-3deg); }
+  .qr{ width:100%; max-width:360px; aspect-ratio:1/1; image-rendering:pixelated; border-radius:8px; display:block }
+
+  .btns{display:flex; flex-wrap:wrap; gap:10px; margin-top:12px}
+  button{
+    padding:12px 14px; border:none; border-radius:12px; cursor:pointer; font-weight:600;
+    background:linear-gradient(180deg,#3b82f6,#1d4ed8); color:#fff;
+    box-shadow:0 10px 24px rgba(59,130,246,.35);
+  }
+  button.secondary{ background:#0b1230; color:#dbeafe; border:1px solid #233361; box-shadow:none }
+  button:disabled{ opacity:.6; cursor:not-allowed }
+
+  .tiny{font-size:11px; color:#8da3c6; margin-top:6px}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <!-- Controls -->
+    <div class="card">
+      <div class="title"><span class="dot"></span><h1>Futuristic QR Generator</h1></div>
+      <p class="sub">Powered by api.qrserver.com • Works on mobile • 100% client-side</p>
+
+      <div class="controls">
+        <label>Text / URL</label>
+        <input id="text" type="text" placeholder="https://example.com or any text" value="https://example.com">
+
+        <div class="row">
+          <div>
+            <label>Size <span id="sizeVal" class="hint">(320 px)</span></label>
+            <input id="size" type="range" min="128" max="1024" step="16" value="320">
+          </div>
+          <div>
+            <label>Quiet Zone / Margin <span id="marginVal" class="hint">(2)</span></label>
+            <input id="margin" type="range" min="0" max="16" step="1" value="2">
+          </div>
+        </div>
+
+        <div class="row-3">
+          <div>
+            <label>Error Correction</label>
+            <select id="ecc">
+              <option value="L">L (~7%)</option>
+              <option value="M" selected>M (~15%)</option>
+              <option value="Q">Q (~25%)</option>
+              <option value="H">H (~30%)</option>
+            </select>
+          </div>
+          <div>
+            <label>Format</label>
+            <select id="format">
+              <option value="png" selected>PNG</option>
+              <option value="jpg">JPG</option>
+              <option value="gif">GIF</option>
+              <option value="svg">SVG</option>
+            </select>
+          </div>
+          <div>
+            <label>Export Scale</label>
+            <select id="scale">
+              <option value="1" selected>1×</option>
+              <option value="2">2×</option>
+              <option value="3">3×</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label>Foreground</label>
+            <input id="fg" type="color" value="#000000">
+          </div>
+          <div>
+            <label>Background</label>
+            <input id="bg" type="color" value="#ffffff">
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label>Center Logo (optional — 2–3 chars or emoji)</label>
+            <input id="logo" type="text" maxlength="4" placeholder="e.g. TY🧠">
+          </div>
+          <div>
+            <label>Logo Size (%) <span id="logoSizeVal" class="hint">(20%)</span></label>
+            <input id="logoSize" type="range" min="10" max="35" step="1" value="20">
+          </div>
+        </div>
+
+        <div class="btns">
+          <button id="make">Generate</button>
+          <button id="download" class="secondary" disabled>Download</button>
+          <button id="open" class="secondary" disabled>Open in new tab</button>
+          <button id="copy" class="">Copy API URL</button>
+        </div>
+        <div class="tiny">Note: Logo overlay is applied on-device for PNG/JPG/GIF (not SVG). For best scan-ability, keep high ECC (Q/H) when using logos.</div>
+      </div>
+    </div>
+
+    <!-- Preview -->
+    <div class="card">
+      <div class="preview" id="preview">
+        <div class="qr-wrap">
+          <img class="qr" id="qrImg" alt="QR Preview"/>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ===== Utilities ===== */
+const $ = (s)=>document.querySelector(s);
+const text = $('#text'), size = $('#size'), margin = $('#margin'), ecc = $('#ecc'),
+      fg = $('#fg'), bg = $('#bg'), fmt = $('#format'), scale = $('#scale'),
+      logo = $('#logo'), logoSize = $('#logoSize'),
+      sizeVal = $('#sizeVal'), marginVal = $('#marginVal'), logoSizeVal = $('#logoSizeVal');
+
+const img = $('#qrImg');
+const btnMake = $('#make'), btnDownload = $('#download'), btnOpen = $('#open'), btnCopy = $('#copy');
+
+let currentApiUrl = '';
+let currentBlobUrl = ''; // for downloads with logo overlay
+
+function hexNoHash(hex){ return hex.replace('#',''); }
+
+function buildApiUrl(baseSize){
+  const params = new URLSearchParams();
+  params.set('size', `${baseSize}x${baseSize}`);
+  params.set('data', text.value.trim() || '');
+  params.set('ecc', ecc.value);                 // L/M/Q/H
+  params.set('margin', margin.value);           // quiet zone
+  params.set('color', hexNoHash(fg.value));     // RRGGBB
+  params.set('bgcolor', hexNoHash(bg.value));   // RRGGBB
+  params.set('format', fmt.value);              // png/jpg/gif/svg
+  return `https://api.qrserver.com/v1/create-qr-code/?${params.toString()}`;
+}
+
+function setStatus(enabled){
+  btnDownload.disabled = !enabled;
+  btnOpen.disabled = !enabled;
+}
+
+function updateLabels(){
+  sizeVal.textContent = `(${size.value} px)`;
+  marginVal.textContent = `(${margin.value})`;
+  logoSizeVal.textContent = `(${logoSize.value}%)`;
+}
+
+async function generate(){
+  updateLabels();
+  const base = parseInt(size.value,10);
+  const factor = parseInt(scale.value,10);
+  const outSize = Math.max(128, Math.min(2048, base * factor));
+
+  const url = buildApiUrl(outSize);
+  currentApiUrl = url;
+  setStatus(!!text.value.trim());
+  cleanupObjectUrl();
+
+  // Show a low-res preview quickly (using base size) while larger export is made for download
+  const previewUrl = buildApiUrl(base);
+
+  // For SVG we skip logo overlay
+  const wantOverlay = !!logo.value.trim() && fmt.value !== 'svg';
+
+  // Always set preview image to base previewUrl
+  img.src = previewUrl;
+
+  if (!wantOverlay){
+    // No overlay: we can download directly from API
+    currentBlobUrl = ''; // not needed
+    return;
+  }
+
+  // Build an overlaid canvas for download (uses hi-res outSize)
+  try{
+    const finalBlobUrl = await renderOverlayToBlobUrl(url, logo.value.trim(), parseInt(logoSize.value,10));
+    currentBlobUrl = finalBlobUrl;
+  }catch(e){
+    console.warn('Overlay render failed, falling back to raw API URL', e);
+    currentBlobUrl = '';
+  }
+}
+
+function cleanupObjectUrl(){
+  if (currentBlobUrl) {
+    URL.revokeObjectURL(currentBlobUrl);
+    currentBlobUrl = '';
+  }
+}
+
+// Render logo on center using canvas; returns blob URL
+function loadImage(url){
+  return new Promise((resolve,reject)=>{
+    const im = new Image();
+    im.crossOrigin = "anonymous"; // API supports CORS; needed for canvas export
+    im.onload = ()=>resolve(im);
+    im.onerror = reject;
+    im.src = url;
+  });
+}
+
+async function renderOverlayToBlobUrl(apiUrl, logoText, logoPct){
+  const im = await loadImage(apiUrl);
+  const canvas = document.createElement('canvas');
+  canvas.width = im.naturalWidth; canvas.height = im.naturalHeight;
+  const ctx = canvas.getContext('2d');
+
+  // draw QR
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(im, 0, 0);
+
+  // logo box
+  const box = Math.floor(Math.min(canvas.width, canvas.height) * (logoPct/100));
+  const x = Math.floor((canvas.width - box)/2);
+  const y = Math.floor((canvas.height - box)/2);
+
+  // Rounded white square with subtle shadow
+  const radius = Math.max(6, Math.floor(box*0.18));
+  roundRect(ctx, x, y, box, box, radius);
+  ctx.fillStyle = '#ffffff';
+  ctx.shadowColor = 'rgba(0,0,0,.25)';
+  ctx.shadowBlur = Math.floor(box*0.08);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // Text in the middle
+  ctx.fillStyle = '#111827';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  // Fit font size
+  const fontSize = Math.floor(box * 0.46);
+  ctx.font = `bold ${fontSize}px system-ui, -apple-system, Segoe UI, Roboto, Arial`;
+  ctx.fillText(logoText, x + box/2, y + box/2);
+
+  const blob = await new Promise(res=>canvas.toBlob(res, 'image/png'));
+  return URL.createObjectURL(blob);
+}
+
+function roundRect(ctx, x, y, w, h, r){
+  const rr = Math.min(r, w/2, h/2);
+  ctx.beginPath();
+  ctx.moveTo(x+rr, y);
+  ctx.arcTo(x+w, y,   x+w, y+h, rr);
+  ctx.arcTo(x+w, y+h, x,   y+h, rr);
+  ctx.arcTo(x,   y+h, x,   y,   rr);
+  ctx.arcTo(x,   y,   x+w, y,   rr);
+  ctx.closePath();
+}
+
+function download(){
+  if (!text.value.trim()) return;
+
+  // If we have a composed image with logo, prefer that.
+  if (currentBlobUrl){
+    const a = document.createElement('a');
+    a.href = currentBlobUrl;
+    a.download = makeFilename('png'); // overlay always PNG
+    a.click();
+    return;
+  }
+
+  // Otherwise download directly from API (any format)
+  const ext = fmt.value.toLowerCase();
+  const a = document.createElement('a');
+  a.href = currentApiUrl;
+  a.download = makeFilename(ext);
+  a.click();
+}
+
+function openInNewTab(){
+  if (!currentApiUrl) return;
+  window.open(currentApiUrl, '_blank');
+}
+
+async function copyUrl(){
+  const url = currentApiUrl || buildApiUrl(parseInt(size.value,10));
+  try{
+    await navigator.clipboard.writeText(url);
+    flash(btnCopy, 'Copied!');
+  }catch{
+    flash(btnCopy, 'Press Ctrl+C', true);
+  }
+}
+
+function makeFilename(ext='png'){
+  const raw = (text.value.trim() || 'qr').slice(0,64).replace(/\s+/g,'_').replace(/[^\w\-]+/g,'');
+  const date = new Date().toISOString().replace(/[:T]/g,'-').slice(0,19);
+  return `${raw || 'qr'}_${date}.${ext}`;
+}
+
+function flash(btn, message, warn=false){
+  const old = btn.textContent;
+  btn.textContent = message;
+  const oldBg = btn.style.background;
+  if (warn) btn.style.background = '#92400e';
+  setTimeout(()=>{ btn.textContent = old; btn.style.background = oldBg; }, 900);
+}
+
+/* ===== Events ===== */
+['input','change'].forEach(ev=>{
+  [text,size,margin,ecc,fg,bg,fmt,scale,logo,logoSize].forEach(el=>{
+    el.addEventListener(ev, ()=> generate());
+  });
+});
+btnMake.addEventListener('click', generate);
+btnDownload.addEventListener('click', download);
+btnOpen.addEventListener('click', openInNewTab);
+btnCopy.addEventListener('click', copyUrl);
+
+// initial
+generate();
+</script>
+</body>
+</html>
